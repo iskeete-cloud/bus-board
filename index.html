@@ -6,37 +6,29 @@
     <style>
         :root { --bg: #000; --card-bg: #111; --accent: #ffcc00; --success: #00ff66; --departed: #ff3333; --text: #fff; }
         body, html { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        
+        /* Layout */
         .admin-header { background: #222; padding: 10px 15px; display: flex; align-items: center; border-bottom: 3px solid var(--accent); gap: 10px; }
         .terminal-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 12px; padding: 12px; height: calc(100vh - 120px); box-sizing: border-box; }
         
-        .bus-card { background: var(--card-bg); border: 3px solid #333; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; }
+        /* Cards */
+        .bus-card { background: var(--card-bg); border: 3px solid #333; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; transition: all 0.3s ease; }
         .bus-num { font-size: 7vw; font-weight: 900; line-height: 1; }
         .status-msg { font-size: 1.2vw; text-transform: uppercase; margin-top: 5px; font-weight: bold; }
         
-        /* The Delete "X" Button */
-        .btn-delete { 
-            position: absolute; 
-            top: 10px; 
-            right: 10px; 
-            background: #ff3333; /* Red background */
-            color: white; /* White X */
-            border: none; 
-            border-radius: 5px; 
-            width: 35px; 
-            height: 35px; 
-            cursor: pointer; 
-            font-weight: bold; 
-            font-size: 1.2rem; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            z-index: 10;
-        }
+        /* Pulsing Animation for Boarding */
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        .active .status-msg { animation: pulse 1.5s infinite; }
+
+        /* The Delete Button */
+        .btn-delete { position: absolute; top: 10px; right: 10px; background: #ff3333; color: white; border: none; border-radius: 5px; width: 35px; height: 35px; cursor: pointer; font-weight: bold; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; z-index: 10; }
         .btn-delete:hover { background: #cc0000; }
 
+        /* States */
         .active { border-color: var(--success) !important; color: var(--success) !important; background: #001a0a !important; }
         .departed { border-color: var(--departed) !important; color: var(--departed) !important; background: #1a0000 !important; }
         
+        /* UI Elements */
         #clock { font-size: 2vw; font-weight: bold; color: var(--accent); text-align: center; height: 40px; }
         .btn { padding: 10px 15px; cursor: pointer; font-weight: bold; border-radius: 5px; border: none; text-transform: uppercase; font-size: 0.8rem; }
         .btn-add { background: var(--accent); color: #000; }
@@ -45,6 +37,7 @@
         .btn-clear { background: #444; color: #fff; margin-left: auto; }
         .btn-depart { background: var(--departed); color: white; margin-top: 10px; padding: 5px 15px; }
 
+        /* Mode Toggles */
         body.tv-mode .admin-header, body.tv-mode .btn-depart, body.tv-mode .btn-delete { display: none; }
         body.tv-mode .terminal-grid { height: calc(100vh - 40px); }
     </style>
@@ -60,9 +53,9 @@
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2025')">2025</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2028')">2028</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2030')">2030</button>
-	   <button class="btn btn-preset" onclick="sendCommand('ADD', '2047')">2047</button>
+        <button class="btn btn-preset" onclick="sendCommand('ADD', '2047')">2047</button>
         
-        <button class="btn btn-audio" id="voiceToggle" onclick="enableAudio()">?? Enable Voice</button>
+        <button class="btn btn-audio" id="voiceToggle" onclick="enableAudio()">🔊 Enable Voice</button>
 
         <button class="btn btn-clear" onclick="sendCommand('CLEAR')">Reset</button>
         <button class="btn" style="background:white;" onclick="window.location.hash='#tv'; location.reload();">TV Mode</button>
@@ -84,19 +77,35 @@
         const isTV = window.location.hash === '#tv';
         if (isTV) document.body.classList.add('tv-mode');
 
-        // Unlock audio context
         function enableAudio() {
             audioEnabled = true;
             document.getElementById('voiceToggle').style.background = '#00ff66';
-            document.getElementById('voiceToggle').innerText = '? Voice Active';
+            document.getElementById('voiceToggle').innerText = '✅ Voice Active';
             const welcome = new SpeechSynthesisUtterance("Voice system activated");
             window.speechSynthesis.speak(welcome);
         }
 
+        // FAST SEND COMMAND (Optimistic Update)
         function sendCommand(action, bus = '') {
             if (action === 'ADD' && !bus) return;
             if (action === 'CLEAR' && !confirm("Clear the board?")) return;
-            if (action === 'ADD') document.getElementById('busInput').value = '';
+            
+            // INSTANT UI FEEDBACK: Show it on screen before Google even responds
+            if (action === 'ADD') {
+                document.getElementById('busInput').value = '';
+                // Check if bus already exists locally
+                if(!busData.find(b => b.id === bus)) {
+                    busData.push({ id: bus, status: 'boarding' });
+                    render();
+                }
+            } else if (action === 'DEPART') {
+                const b = busData.find(b => b.id === bus);
+                if (b) b.status = 'departed';
+                render();
+            } else if (action === 'REMOVE') {
+                busData = busData.filter(b => b.id !== bus);
+                render();
+            }
 
             const form = document.createElement('form');
             form.method = 'GET';
@@ -117,7 +126,8 @@
             form.submit();
             document.body.removeChild(form);
 
-            setTimeout(fetchData, 1500);
+            // Fetch from Google after a short delay to sync official data
+            setTimeout(fetchData, 2500);
         }
 
         async function fetchData() {
@@ -134,7 +144,6 @@
                     };
                 }).filter(b => b.id);
 
-                // Check for newly added buses for the voice
                 if (audioEnabled && newBusData.length > 0) {
                     const latest = newBusData.filter(b => b.status.includes('boarding')).pop();
                     if (latest && latest.id !== lastPlayedBus) {
@@ -166,7 +175,7 @@
                 
                 if (b) {
                     card.innerHTML = `
-                        <button class="btn-delete" title="Delete" onclick="sendCommand('REMOVE', '${b.id}')">�</button>
+                        <button class="btn-delete" title="Delete" onclick="sendCommand('REMOVE', '${b.id}')">X</button>
                         <div class="bus-num">${b.id}</div>
                         <div class="status-msg">${b.status}</div>
                         ${isBoarding ? `<button class="btn btn-depart" onclick="sendCommand('DEPART', '${b.id}')">Depart</button>` : ''}
@@ -178,7 +187,7 @@
             }
         }
 
-        setInterval(fetchData, 5000);
+        setInterval(fetchData, 3000); // Faster sync: 3 seconds
         setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString(); }, 1000);
         fetchData();
     </script>
