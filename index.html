@@ -73,6 +73,7 @@
         let busData = [];
         let lastPlayedBus = null;
         let audioEnabled = false;
+        let isSyncLocked = false; // Prevents disappearing buses
 
         const isTV = window.location.hash === '#tv';
         if (isTV) document.body.classList.add('tv-mode');
@@ -85,15 +86,15 @@
             window.speechSynthesis.speak(welcome);
         }
 
-        // FAST SEND COMMAND (Optimistic Update)
         function sendCommand(action, bus = '') {
             if (action === 'ADD' && !bus) return;
             if (action === 'CLEAR' && !confirm("Clear the board?")) return;
             
-            // INSTANT UI FEEDBACK: Show it on screen before Google even responds
+            // LOCK sync: Don't let Google's "old" data overwrite our current screen
+            isSyncLocked = true;
+
             if (action === 'ADD') {
                 document.getElementById('busInput').value = '';
-                // Check if bus already exists locally
                 if(!busData.find(b => b.id === bus)) {
                     busData.push({ id: bus, status: 'boarding' });
                     render();
@@ -111,26 +112,23 @@
             form.method = 'GET';
             form.action = SAVE_URL;
             form.target = 'hidden_iframe';
-
             const inputAction = document.createElement('input');
-            inputAction.name = 'action';
-            inputAction.value = action;
+            inputAction.name = 'action'; inputAction.value = action;
             form.appendChild(inputAction);
-
             const inputBus = document.createElement('input');
-            inputBus.name = 'bus';
-            inputBus.value = bus;
+            inputBus.name = 'bus'; inputBus.value = bus;
             form.appendChild(inputBus);
-
             document.body.appendChild(form);
             form.submit();
             document.body.removeChild(form);
 
-            // Fetch from Google after a short delay to sync official data
-            setTimeout(fetchData, 2500);
+            // Wait 6 seconds before allowing a refresh to give Google time to save
+            setTimeout(() => { isSyncLocked = false; fetchData(); }, 6000);
         }
 
         async function fetchData() {
+            if (isSyncLocked) return;
+
             try {
                 const res = await fetch(READ_URL + '&cachebuster=' + Date.now());
                 const text = await res.text();
@@ -166,6 +164,7 @@
         function render() {
             const container = document.getElementById('bus-container');
             container.innerHTML = '';
+            // Always show 9 slots
             for (let i = 0; i < 9; i++) {
                 const b = busData[i];
                 const card = document.createElement('div');
@@ -187,7 +186,7 @@
             }
         }
 
-        setInterval(fetchData, 3000); // Faster sync: 3 seconds
+        setInterval(fetchData, 3000);
         setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString(); }, 1000);
         fetchData();
     </script>
