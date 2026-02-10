@@ -6,29 +6,16 @@
     <style>
         :root { --bg: #000; --card-bg: #111; --accent: #ffcc00; --success: #00ff66; --departed: #ff3333; --text: #fff; }
         body, html { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; overflow: hidden; }
-        
-        /* Layout */
         .admin-header { background: #222; padding: 10px 15px; display: flex; align-items: center; border-bottom: 3px solid var(--accent); gap: 10px; }
         .terminal-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 12px; padding: 12px; height: calc(100vh - 120px); box-sizing: border-box; }
-        
-        /* Cards */
         .bus-card { background: var(--card-bg); border: 3px solid #333; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; transition: all 0.3s ease; }
         .bus-num { font-size: 7vw; font-weight: 900; line-height: 1; }
         .status-msg { font-size: 1.2vw; text-transform: uppercase; margin-top: 5px; font-weight: bold; }
-        
-        /* Pulsing Animation for Boarding */
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
         .active .status-msg { animation: pulse 1.5s infinite; }
-
-        /* The Delete Button */
         .btn-delete { position: absolute; top: 10px; right: 10px; background: #ff3333; color: white; border: none; border-radius: 5px; width: 35px; height: 35px; cursor: pointer; font-weight: bold; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; z-index: 10; }
-        .btn-delete:hover { background: #cc0000; }
-
-        /* States */
         .active { border-color: var(--success) !important; color: var(--success) !important; background: #001a0a !important; }
         .departed { border-color: var(--departed) !important; color: var(--departed) !important; background: #1a0000 !important; }
-        
-        /* UI Elements */
         #clock { font-size: 2vw; font-weight: bold; color: var(--accent); text-align: center; height: 40px; }
         .btn { padding: 10px 15px; cursor: pointer; font-weight: bold; border-radius: 5px; border: none; text-transform: uppercase; font-size: 0.8rem; }
         .btn-add { background: var(--accent); color: #000; }
@@ -36,8 +23,6 @@
         .btn-audio { background: #0044ff; color: white; }
         .btn-clear { background: #444; color: #fff; margin-left: auto; }
         .btn-depart { background: var(--departed); color: white; margin-top: 10px; padding: 5px 15px; }
-
-        /* Mode Toggles */
         body.tv-mode .admin-header, body.tv-mode .btn-depart, body.tv-mode .btn-delete { display: none; }
         body.tv-mode .terminal-grid { height: calc(100vh - 40px); }
     </style>
@@ -48,15 +33,13 @@
         <input type="text" id="busInput" style="width:60px; padding:8px;" placeholder="#">
         <button class="btn btn-add" onclick="sendCommand('ADD', document.getElementById('busInput').value)">Add</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2007')">2007</button>
-        <button class="btn btn-preset" onclick="sendCommand('ADD', '2019')">2019</button>
+        <button class="btn btn-preset" onclick="sendCommand('ADD', '2009')">2009</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2018')">2018</button>
-        <button class="btn btn-preset" onclick="sendCommand('ADD', '2023')">2023</button>
+        <button class="btn btn-preset" onclick="sendCommand('ADD', '2025')">2025</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2028')">2028</button>
-        <button class="btn btn-preset" onclick="sendCommand('ADD', '2033')">2033</button>
-        <button class="btn btn-preset" onclick="sendCommand('ADD', '2046')">2046</button>
-        
+        <button class="btn btn-preset" onclick="sendCommand('ADD', '2030')">2030</button>
+        <button class="btn btn-preset" onclick="sendCommand('ADD', '2047')">2047</button>
         <button class="btn btn-audio" id="voiceToggle" onclick="enableAudio()">🔊 Enable Voice</button>
-
         <button class="btn btn-clear" onclick="sendCommand('CLEAR')">Reset</button>
         <button class="btn" style="background:white;" onclick="window.location.hash='#tv'; location.reload();">TV Mode</button>
     </div>
@@ -71,9 +54,10 @@
         const READ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
 
         let busData = [];
+        let departureTimes = {}; // Stores { '2007': '2:45 PM' }
         let lastPlayedBus = null;
         let audioEnabled = false;
-        let isSyncLocked = false; // Prevents disappearing buses
+        let isSyncLocked = false;
 
         const isTV = window.location.hash === '#tv';
         if (isTV) document.body.classList.add('tv-mode');
@@ -82,15 +66,13 @@
             audioEnabled = true;
             document.getElementById('voiceToggle').style.background = '#00ff66';
             document.getElementById('voiceToggle').innerText = '✅ Voice Active';
-            const welcome = new SpeechSynthesisUtterance("Voice system activated");
-            window.speechSynthesis.speak(welcome);
+            window.speechSynthesis.speak(new SpeechSynthesisUtterance("Voice system activated"));
         }
 
         function sendCommand(action, bus = '') {
             if (action === 'ADD' && !bus) return;
             if (action === 'CLEAR' && !confirm("Clear the board?")) return;
             
-            // LOCK sync: Don't let Google's "old" data overwrite our current screen
             isSyncLocked = true;
 
             if (action === 'ADD') {
@@ -100,35 +82,34 @@
                     render();
                 }
             } else if (action === 'DEPART') {
+                const time = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+                departureTimes[bus] = time; // Save time locally
                 const b = busData.find(b => b.id === bus);
-                if (b) b.status = 'departed';
+                if (b) b.status = `departed ${time}`;
                 render();
             } else if (action === 'REMOVE') {
                 busData = busData.filter(b => b.id !== bus);
+                delete departureTimes[bus];
                 render();
+            } else if (action === 'CLEAR') {
+                departureTimes = {};
             }
 
             const form = document.createElement('form');
             form.method = 'GET';
             form.action = SAVE_URL;
             form.target = 'hidden_iframe';
-            const inputAction = document.createElement('input');
-            inputAction.name = 'action'; inputAction.value = action;
-            form.appendChild(inputAction);
-            const inputBus = document.createElement('input');
-            inputBus.name = 'bus'; inputBus.value = bus;
-            form.appendChild(inputBus);
+            const inputAction = document.createElement('input'); inputAction.name = 'action'; inputAction.value = action; form.appendChild(inputAction);
+            const inputBus = document.createElement('input'); inputBus.name = 'bus'; inputBus.value = bus; form.appendChild(inputBus);
             document.body.appendChild(form);
             form.submit();
             document.body.removeChild(form);
 
-            // Wait 6 seconds before allowing a refresh to give Google time to save
             setTimeout(() => { isSyncLocked = false; fetchData(); }, 6000);
         }
 
         async function fetchData() {
             if (isSyncLocked) return;
-
             try {
                 const res = await fetch(READ_URL + '&cachebuster=' + Date.now());
                 const text = await res.text();
@@ -136,45 +117,40 @@
                 const dataRows = rows.slice(1);
                 
                 const newBusData = dataRows.map(c => {
-                    return { 
-                        id: (c[0]||'').replace(/"/g, '').trim(), 
-                        status: (c[1]||'').replace(/"/g, '').trim().toLowerCase() 
-                    };
+                    const id = (c[0]||'').replace(/"/g, '').trim();
+                    let status = (c[1]||'').replace(/"/g, '').trim().toLowerCase();
+                    // If Google says departed but we have a local time, show the time
+                    if (status.includes('departed') && departureTimes[id]) {
+                        status = `departed ${departureTimes[id]}`;
+                    }
+                    return { id, status };
                 }).filter(b => b.id);
 
                 if (audioEnabled && newBusData.length > 0) {
                     const latest = newBusData.filter(b => b.status.includes('boarding')).pop();
                     if (latest && latest.id !== lastPlayedBus) {
-                        playAnnouncement(latest.id);
+                        const msg = new SpeechSynthesisUtterance(`Bus ${latest.id} is now boarding.`);
+                        msg.rate = 0.9; window.speechSynthesis.speak(msg);
                         lastPlayedBus = latest.id;
                     }
                 }
-
                 busData = newBusData;
                 render();
             } catch (e) { console.error("Read error", e); }
         }
 
-        function playAnnouncement(id) { 
-            const msg = new SpeechSynthesisUtterance(`Bus ${id} is now boarding.`);
-            msg.rate = 0.9;
-            window.speechSynthesis.speak(msg);
-        }
-
         function render() {
             const container = document.getElementById('bus-container');
             container.innerHTML = '';
-            // Always show 9 slots
             for (let i = 0; i < 9; i++) {
                 const b = busData[i];
                 const card = document.createElement('div');
                 const isBoarding = b?.status.includes('boarding');
                 const isDeparted = b?.status.includes('departed');
                 card.className = `bus-card ${isBoarding ? 'active' : ''} ${isDeparted ? 'departed' : ''}`;
-                
                 if (b) {
                     card.innerHTML = `
-                        <button class="btn-delete" title="Delete" onclick="sendCommand('REMOVE', '${b.id}')">X</button>
+                        <button class="btn-delete" onclick="sendCommand('REMOVE', '${b.id}')">X</button>
                         <div class="bus-num">${b.id}</div>
                         <div class="status-msg">${b.status}</div>
                         ${isBoarding ? `<button class="btn btn-depart" onclick="sendCommand('DEPART', '${b.id}')">Depart</button>` : ''}
@@ -187,9 +163,10 @@
         }
 
         setInterval(fetchData, 3000);
-        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString(); }, 1000);
+        setInterval(() => { 
+            document.getElementById('clock').innerText = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }); 
+        }, 1000);
         fetchData();
     </script>
 </body>
 </html>
-
