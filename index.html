@@ -49,8 +49,12 @@
     <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
 
     <script>
+        // Ensure this ID matches the one in your Google Sheet URL
         const SHEET_ID = '1LudmMCB3g73pPBYQI7nHTmTriWpb482Xs77vjI74xEU';
-        const SAVE_URL = 'https://script.google.com/macros/s/AKfycbzjseTsSxiMHSERRRgmt2vCictNW5bfvEVuZif01IaBOxia1N0Xt958dFcIyuWl3R3u/exec';
+        
+        // UPDATED WITH YOUR NEW DEPLOYMENT URL
+        const SAVE_URL = 'https://script.google.com/macros/s/AKfycbzgpPVvvHU42-5RVO40Yikt3c45hUhiYTrY9FBeCEjXNSir9axtKJNkIgh643QE4U4R/exec';
+        
         const READ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
 
         let busData = [];
@@ -74,7 +78,7 @@
             
             isSyncLocked = true;
 
-            // Visual update for immediate feedback
+            // Immediate UI Update
             if (action === 'ADD') {
                 document.getElementById('busInput').value = '';
                 if(!busData.find(b => b.id === bus)) {
@@ -90,18 +94,27 @@
                 render();
             }
 
-            // Send command to Apps Script
+            // Submit to Google Script via Hidden Form
             const form = document.createElement('form');
             form.method = 'GET';
             form.action = SAVE_URL;
             form.target = 'hidden_iframe';
-            const inputAction = document.createElement('input'); inputAction.name = 'action'; inputAction.value = action; form.appendChild(inputAction);
-            const inputBus = document.createElement('input'); inputBus.name = 'bus'; inputBus.value = bus; form.appendChild(inputBus);
+            
+            const inputAction = document.createElement('input'); 
+            inputAction.name = 'action'; 
+            inputAction.value = action; 
+            form.appendChild(inputAction);
+            
+            const inputBus = document.createElement('input'); 
+            inputBus.name = 'bus'; 
+            inputBus.value = bus; 
+            form.appendChild(inputBus);
+            
             document.body.appendChild(form);
             form.submit();
             document.body.removeChild(form);
 
-            // Wait 4 seconds for Google to process, then refresh data
+            // Unlock and refresh after 4 seconds
             setTimeout(() => { isSyncLocked = false; fetchData(); }, 4000);
         }
 
@@ -119,12 +132,13 @@
                     return { id, status };
                 }).filter(b => b.id);
 
-                // Voice Logic
+                // Voice announcement logic
                 if (audioEnabled && newBusData.length > 0) {
                     const latest = newBusData.filter(b => b.status.toLowerCase().includes('boarding')).pop();
                     if (latest && latest.id !== lastPlayedBus) {
                         const msg = new SpeechSynthesisUtterance(`Bus ${latest.id} is now boarding.`);
-                        msg.rate = 0.9; window.speechSynthesis.speak(msg);
+                        msg.rate = 0.9; 
+                        window.speechSynthesis.speak(msg);
                         lastPlayedBus = latest.id;
                     }
                 }
@@ -160,6 +174,7 @@
             }
         }
 
+        // Auto-refresh loops
         setInterval(fetchData, 3000);
         setInterval(() => { 
             document.getElementById('clock').innerText = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }); 
