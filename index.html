@@ -7,33 +7,8 @@
         :root { --bg: #000; --card-bg: #111; --accent: #ffcc00; --success: #00ff66; --departed: #ff3333; --text: #fff; }
         body, html { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         .admin-header { background: #222; padding: 10px 15px; display: flex; align-items: center; border-bottom: 3px solid var(--accent); gap: 10px; }
-        
-        .message-display { 
-            background: #1a1a1a; 
-            border: 3px solid var(--accent); 
-            margin: 8px 12px 0 12px; 
-            border-radius: 12px; 
-            height: 8vh; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            font-size: 3vw; 
-            font-weight: bold; 
-            color: var(--accent);
-            text-align: center;
-            overflow: hidden;
-        }
-
-        .terminal-grid { 
-            display: grid; 
-            grid-template-columns: repeat(3, 1fr); 
-            grid-template-rows: repeat(3, 1fr); 
-            gap: 10px; 
-            padding: 10px 12px; 
-            height: calc(90vh - 130px); 
-            box-sizing: border-box; 
-        }
-
+        .message-display { background: #1a1a1a; border: 3px solid var(--accent); margin: 8px 12px 0 12px; border-radius: 12px; height: 8vh; display: flex; align-items: center; justify-content: center; font-size: 3vw; font-weight: bold; color: var(--accent); text-align: center; overflow: hidden; }
+        .terminal-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 10px; padding: 10px 12px; height: calc(90vh - 130px); box-sizing: border-box; }
         .bus-card { background: var(--card-bg); border: 3px solid #333; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; transition: all 0.3s ease; }
         .bus-num { font-size: 6.5vw; font-weight: 900; line-height: 1; }
         .status-msg { font-size: 1.2vw; text-transform: uppercase; margin-top: 5px; font-weight: bold; }
@@ -42,16 +17,13 @@
         .btn-delete { position: absolute; top: 10px; right: 10px; background: #ff3333; color: white; border: none; border-radius: 5px; width: 30px; height: 30px; cursor: pointer; font-weight: bold; font-size: 1rem; display: flex; align-items: center; justify-content: center; z-index: 10; }
         .active { border-color: var(--success) !important; color: var(--success) !important; background: #001a0a !important; }
         .departed { border-color: var(--departed) !important; color: var(--departed) !important; background: #1a0000 !important; }
-        
         #clock { font-size: 2vw; font-weight: bold; color: var(--accent); text-align: center; height: 35px; margin-bottom: 5px; }
-        
         .btn { padding: 8px 12px; cursor: pointer; font-weight: bold; border-radius: 5px; border: none; text-transform: uppercase; font-size: 0.75rem; }
         .btn-add { background: var(--accent); color: #000; }
         .btn-preset { background: #333; color: #fff; border: 1px solid #555; }
         .btn-audio { background: #0044ff; color: white; }
         .btn-clear { background: #444; color: #fff; margin-left: auto; }
         .btn-depart { background: var(--departed); color: white; margin-top: 10px; padding: 5px 15px; }
-        
         body.tv-mode .admin-header, body.tv-mode .btn-depart, body.tv-mode .btn-delete { display: none; }
         body.tv-mode .terminal-grid { height: calc(92vh - 40px); }
     </style>
@@ -68,17 +40,14 @@
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2028')">2028</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2030')">2030</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2047')">2047</button>
-        
         <input type="text" id="msgInput" style="width:120px; padding:6px; margin-left:8px;" placeholder="Message...">
         <button class="btn btn-add" onclick="sendMsg()">Set</button>
-
         <button class="btn btn-audio" id="voiceToggle" onclick="enableAudio()">🔊 Voice</button>
         <button class="btn btn-clear" onclick="sendCommand('CLEAR')">Reset</button>
         <button class="btn" style="background:white; color:black;" onclick="window.location.hash='#tv'; location.reload();">TV Mode</button>
     </div>
 
     <div class="message-display" id="special-message"></div>
-
     <div class="terminal-grid" id="bus-container"></div>
     <div id="clock">--:--:--</div>
     <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
@@ -115,7 +84,6 @@
         function sendCommand(action, bus = '') {
             if (action === 'ADD' && !bus) return;
             if (action === 'CLEAR' && !confirm("Clear the board and message?")) return;
-            
             isSyncLocked = true;
             if (action === 'ADD') {
                 document.getElementById('busInput').value = '';
@@ -123,21 +91,13 @@
                     busData.push({ id: bus, status: 'Boarding' });
                     render();
                 }
-            } else if (action === 'DEPART') {
-                const b = busData.find(b => b.id === bus);
-                if (b) b.status = "Updating..."; 
-                render();
-            } else if (action === 'REMOVE') {
-                busData = busData.filter(b => b.id !== bus);
+            } else if (action === 'DEPART' || action === 'REMOVE') {
                 render();
             } else if (action === 'CLEAR') {
                 document.getElementById('special-message').innerText = '';
-                document.getElementById('msgInput').value = '';
             }
-
             const finalUrl = `${SAVE_URL}?action=${action}&bus=${encodeURIComponent(bus)}`;
             document.getElementById('hidden_iframe').src = finalUrl;
-
             setTimeout(() => { isSyncLocked = false; fetchData(); }, 4000);
         }
 
@@ -146,14 +106,11 @@
             try {
                 const res = await fetch(READ_URL + '&cachebuster=' + Date.now());
                 const text = await res.text();
-                // Split by rows
                 const rows = text.split('\n').map(row => row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
                 
-                // FIXED MESSAGE LOGIC: 
-                // We look for the message in Cell C2 specifically.
-                // In Google's CSV export, that is row index 1, column index 2.
-                if (rows.length > 1 && rows[1].length > 2) {
-                    const rawMsg = rows[1][2].replace(/"/g, '').trim();
+                // LOOK IN ROW 25, COLUMN A (Index 24, Index 0)
+                if (rows[24] && rows[24][0]) {
+                    const rawMsg = rows[24][0].replace(/"/g, '').trim();
                     document.getElementById('special-message').innerText = rawMsg;
                 }
 
@@ -162,7 +119,7 @@
                     const id = (c[0]||'').replace(/"/g, '').trim();
                     let status = (c[1]||'').replace(/"/g, '').trim(); 
                     return { id, status };
-                }).filter(b => b.id);
+                }).filter(b => b.id && b.id !== document.getElementById('special-message').innerText); // Ensure msg row isn't read as a bus
 
                 if (audioEnabled && newBusData.length > 0) {
                     const latest = newBusData.filter(b => b.status.toLowerCase().includes('boarding')).pop();
@@ -172,7 +129,7 @@
                         lastPlayedBus = latest.id;
                     }
                 }
-                busData = newBusData;
+                busData = newBusData.slice(0, 9); // Keep grid at 9
                 render();
             } catch (e) { console.error("Read error", e); }
         }
@@ -186,24 +143,16 @@
                 const isBoarding = b?.status.toLowerCase().includes('boarding');
                 const isDeparted = b?.status.toLowerCase().includes('departed');
                 card.className = `bus-card ${isBoarding ? 'active' : ''} ${isDeparted ? 'departed' : ''}`;
-                if (b) {
-                    card.innerHTML = `
-                        <button class="btn-delete" onclick="sendCommand('REMOVE', '${b.id}')">X</button>
-                        <div class="bus-num">${b.id}</div>
-                        <div class="status-msg">${b.status}</div>
-                        ${isBoarding ? `<button class="btn btn-depart" onclick="sendCommand('DEPART', '${b.id}')">Depart</button>` : ''}
-                    `;
+                if (b && b.id.length < 10) { // Safety check to not render message as a bus
+                    card.innerHTML = `<button class="btn-delete" onclick="sendCommand('REMOVE', '${b.id}')">X</button><div class="bus-num">${b.id}</div><div class="status-msg">${b.status}</div>${isBoarding ? `<button class="btn btn-depart" onclick="sendCommand('DEPART', '${b.id}')">Depart</button>` : ''}`;
                 } else {
                     card.innerHTML = `<div class="bus-num" style="color:#222">-</div>`;
                 }
                 container.appendChild(card);
             }
         }
-
         setInterval(fetchData, 3000);
-        setInterval(() => { 
-            document.getElementById('clock').innerText = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }); 
-        }, 1000);
+        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }); }, 1000);
         fetchData();
     </script>
 </body>
