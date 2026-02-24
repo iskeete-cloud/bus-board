@@ -7,9 +7,37 @@
         :root { --bg: #000; --card-bg: #111; --accent: #ffcc00; --success: #00ff66; --departed: #ff3333; --text: #fff; }
         body, html { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         .admin-header { background: #222; padding: 10px 15px; display: flex; align-items: center; border-bottom: 3px solid var(--accent); gap: 10px; }
-        .terminal-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 12px; padding: 12px; height: calc(100vh - 120px); box-sizing: border-box; }
+        
+        /* New Message Bar Styling */
+        .message-display { 
+            background: #1a1a1a; 
+            border: 3px solid var(--accent); 
+            margin: 12px 12px 0 12px; 
+            border-radius: 15px; 
+            height: 15vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 4vw; 
+            font-weight: bold; 
+            color: var(--accent);
+            text-align: center;
+            overflow: hidden;
+        }
+
+        /* Adjusted Grid to share space with the message bar */
+        .terminal-grid { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            grid-template-rows: repeat(3, 1fr); 
+            gap: 12px; 
+            padding: 12px; 
+            height: calc(85vh - 160px); 
+            box-sizing: border-box; 
+        }
+
         .bus-card { background: var(--card-bg); border: 3px solid #333; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; transition: all 0.3s ease; }
-        .bus-num { font-size: 7vw; font-weight: 900; line-height: 1; }
+        .bus-num { font-size: 6vw; font-weight: 900; line-height: 1; }
         .status-msg { font-size: 1.2vw; text-transform: uppercase; margin-top: 5px; font-weight: bold; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
         .active .status-msg { animation: pulse 1.5s infinite; }
@@ -24,37 +52,39 @@
         .btn-clear { background: #444; color: #fff; margin-left: auto; }
         .btn-depart { background: var(--departed); color: white; margin-top: 10px; padding: 5px 15px; }
         body.tv-mode .admin-header, body.tv-mode .btn-depart, body.tv-mode .btn-delete { display: none; }
-        body.tv-mode .terminal-grid { height: calc(100vh - 40px); }
+        body.tv-mode .terminal-grid { height: calc(85vh - 40px); }
     </style>
 </head>
 <body>
 
     <div class="admin-header">
-        <input type="text" id="busInput" style="width:60px; padding:8px;" placeholder="#">
+        <input type="text" id="busInput" style="width:50px; padding:8px;" placeholder="#">
         <button class="btn btn-add" onclick="sendCommand('ADD', document.getElementById('busInput').value)">Add</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2007')">2007</button>
+        <button class="btn btn-preset" onclick="sendCommand('ADD', '2009')">2009</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2018')">2018</button>
-        <button class="btn btn-preset" onclick="sendCommand('ADD', '2019')">2019</button>
-        <button class="btn btn-preset" onclick="sendCommand('ADD', '2023')">2023</button>
+        <button class="btn btn-preset" onclick="sendCommand('ADD', '2025')">2025</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2028')">2028</button>
-        <button class="btn btn-preset" onclick="sendCommand('ADD', '2033')">2033</button>
-        <button class="btn btn-preset" onclick="sendCommand('ADD', '2046')">2046</button>
-        <button class="btn btn-audio" id="voiceToggle" onclick="enableAudio()">🔊 Enable Voice</button>
+        <button class="btn btn-preset" onclick="sendCommand('ADD', '2030')">2030</button>
+        <button class="btn btn-preset" onclick="sendCommand('ADD', '2047')">2047</button>
+        
+        <input type="text" id="msgInput" style="width:150px; padding:8px; margin-left:10px;" placeholder="Special Message...">
+        <button class="btn btn-add" onclick="sendMsg()">Set Msg</button>
+
+        <button class="btn btn-audio" id="voiceToggle" onclick="enableAudio()">🔊 Voice</button>
         <button class="btn btn-clear" onclick="sendCommand('CLEAR')">Reset</button>
         <button class="btn" style="background:white;" onclick="window.location.hash='#tv'; location.reload();">TV Mode</button>
     </div>
+
+    <div class="message-display" id="special-message"></div>
 
     <div class="terminal-grid" id="bus-container"></div>
     <div id="clock">--:--:--</div>
     <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
 
     <script>
-        // Ensure this ID matches the one in your Google Sheet URL
         const SHEET_ID = '1LudmMCB3g73pPBYQI7nHTmTriWpb482Xs77vjI74xEU';
-        
-        // UPDATED WITH YOUR NEW DEPLOYMENT URL
         const SAVE_URL = 'https://script.google.com/macros/s/AKfycbzgpPVvvHU42-5RVO40Yikt3c45hUhiYTrY9FBeCEjXNSir9axtKJNkIgh643QE4U4R/exec';
-        
         const READ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
 
         let busData = [];
@@ -72,13 +102,26 @@
             window.speechSynthesis.speak(new SpeechSynthesisUtterance("Voice system activated"));
         }
 
+        // New function to handle sending the special message
+        function sendMsg() {
+            const msg = document.getElementById('msgInput').value;
+            const form = document.createElement('form');
+            form.method = 'GET';
+            form.action = SAVE_URL;
+            form.target = 'hidden_iframe';
+            const inputAction = document.createElement('input'); inputAction.name = 'action'; inputAction.value = 'SET_MSG'; form.appendChild(inputAction);
+            const inputMsg = document.createElement('input'); inputMsg.name = 'msg'; inputMsg.value = msg; form.appendChild(inputMsg);
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
+            document.getElementById('special-message').innerText = msg;
+        }
+
         function sendCommand(action, bus = '') {
             if (action === 'ADD' && !bus) return;
-            if (action === 'CLEAR' && !confirm("Clear the board?")) return;
+            if (action === 'CLEAR' && !confirm("Clear the board and message?")) return;
             
             isSyncLocked = true;
-
-            // Immediate UI Update
             if (action === 'ADD') {
                 document.getElementById('busInput').value = '';
                 if(!busData.find(b => b.id === bus)) {
@@ -92,29 +135,21 @@
             } else if (action === 'REMOVE') {
                 busData = busData.filter(b => b.id !== bus);
                 render();
+            } else if (action === 'CLEAR') {
+                document.getElementById('special-message').innerText = '';
+                document.getElementById('msgInput').value = '';
             }
 
-            // Submit to Google Script via Hidden Form
             const form = document.createElement('form');
             form.method = 'GET';
             form.action = SAVE_URL;
             form.target = 'hidden_iframe';
-            
-            const inputAction = document.createElement('input'); 
-            inputAction.name = 'action'; 
-            inputAction.value = action; 
-            form.appendChild(inputAction);
-            
-            const inputBus = document.createElement('input'); 
-            inputBus.name = 'bus'; 
-            inputBus.value = bus; 
-            form.appendChild(inputBus);
-            
+            const inputAction = document.createElement('input'); inputAction.name = 'action'; inputAction.value = action; form.appendChild(inputAction);
+            const inputBus = document.createElement('input'); inputBus.name = 'bus'; inputBus.value = bus; form.appendChild(inputBus);
             document.body.appendChild(form);
             form.submit();
             document.body.removeChild(form);
 
-            // Unlock and refresh after 4 seconds
             setTimeout(() => { isSyncLocked = false; fetchData(); }, 4000);
         }
 
@@ -124,21 +159,23 @@
                 const res = await fetch(READ_URL + '&cachebuster=' + Date.now());
                 const text = await res.text();
                 const rows = text.split('\n').map(row => row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
-                const dataRows = rows.slice(1);
                 
+                // Fetch the special message from cell C2 (Row 1, Index 2 in gviz)
+                const specialMsg = (rows[1][2] || '').replace(/"/g, '').trim();
+                document.getElementById('special-message').innerText = specialMsg;
+
+                const dataRows = rows.slice(1);
                 const newBusData = dataRows.map(c => {
                     const id = (c[0]||'').replace(/"/g, '').trim();
                     let status = (c[1]||'').replace(/"/g, '').trim(); 
                     return { id, status };
                 }).filter(b => b.id);
 
-                // Voice announcement logic
                 if (audioEnabled && newBusData.length > 0) {
                     const latest = newBusData.filter(b => b.status.toLowerCase().includes('boarding')).pop();
                     if (latest && latest.id !== lastPlayedBus) {
                         const msg = new SpeechSynthesisUtterance(`Bus ${latest.id} is now boarding.`);
-                        msg.rate = 0.9; 
-                        window.speechSynthesis.speak(msg);
+                        msg.rate = 0.9; window.speechSynthesis.speak(msg);
                         lastPlayedBus = latest.id;
                     }
                 }
@@ -153,13 +190,9 @@
             for (let i = 0; i < 9; i++) {
                 const b = busData[i];
                 const card = document.createElement('div');
-                
-                const currentStatus = b ? b.status.toLowerCase() : '';
-                const isBoarding = currentStatus.includes('boarding');
-                const isDeparted = currentStatus.includes('departed');
-                
+                const isBoarding = b?.status.toLowerCase().includes('boarding');
+                const isDeparted = b?.status.toLowerCase().includes('departed');
                 card.className = `bus-card ${isBoarding ? 'active' : ''} ${isDeparted ? 'departed' : ''}`;
-                
                 if (b) {
                     card.innerHTML = `
                         <button class="btn-delete" onclick="sendCommand('REMOVE', '${b.id}')">X</button>
@@ -174,7 +207,6 @@
             }
         }
 
-        // Auto-refresh loops
         setInterval(fetchData, 3000);
         setInterval(() => { 
             document.getElementById('clock').innerText = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }); 
@@ -183,4 +215,3 @@
     </script>
 </body>
 </html>
-
