@@ -1,50 +1,155 @@
-// --- Replace your sendMsg and fetchData functions with these ---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RLE Bus Command Center</title>
+    <style>
+        :root { --bg: #000; --card-bg: #111; --accent: #ffcc00; --success: #00ff66; --departed: #ff3333; --text: #fff; }
+        body, html { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        .admin-header { background: #222; padding: 10px 15px; display: flex; align-items: center; border-bottom: 3px solid var(--accent); gap: 10px; }
+        .message-display { background: #1a1a1a; border: 3px solid var(--accent); margin: 8px 12px 0 12px; border-radius: 12px; height: 8vh; display: flex; align-items: center; justify-content: center; font-size: 3vw; font-weight: bold; color: var(--accent); text-align: center; overflow: hidden; }
+        .terminal-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 10px; padding: 10px 12px; height: calc(90vh - 130px); box-sizing: border-box; }
+        .bus-card { background: var(--card-bg); border: 3px solid #333; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; }
+        .bus-num { font-size: 6.5vw; font-weight: 900; line-height: 1; }
+        .status-msg { font-size: 1.2vw; text-transform: uppercase; margin-top: 5px; font-weight: bold; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        .active .status-msg { animation: pulse 1.5s infinite; }
+        .btn-delete { position: absolute; top: 10px; right: 10px; background: #ff3333; color: white; border: none; border-radius: 5px; width: 30px; height: 30px; cursor: pointer; font-weight: bold; }
+        .active { border-color: var(--success) !important; color: var(--success) !important; background: #001a0a !important; }
+        .departed { border-color: var(--departed) !important; color: var(--departed) !important; background: #1a0000 !important; }
+        #clock { font-size: 2vw; font-weight: bold; color: var(--accent); text-align: center; height: 35px; margin-bottom: 5px; }
+        .btn { padding: 8px 12px; cursor: pointer; font-weight: bold; border-radius: 5px; border: none; text-transform: uppercase; font-size: 0.75rem; }
+        .btn-add { background: var(--accent); color: #000; }
+        .btn-audio { background: #0044ff; color: white; }
+        .btn-clear { background: #444; color: #fff; margin-left: auto; }
+        .btn-msg-clear { background: #ff3333; color: white; padding: 6px 10px; }
+        body.tv-mode .admin-header, body.tv-mode .btn-delete { display: none; }
+    </style>
+</head>
+<body>
 
-function sendMsg() {
-    const msg = document.getElementById('msgInput').value;
-    if (!msg) return;
-    isSyncLocked = true;
-    const finalUrl = `${SAVE_URL}?action=SET_MSG&msg=${encodeURIComponent(msg)}`;
-    document.getElementById('hidden_iframe').src = finalUrl;
-    document.getElementById('special-message').innerText = msg;
-    setTimeout(() => { isSyncLocked = false; fetchData(); }, 3000);
-}
-
-function clearMsg() {
-    isSyncLocked = true;
-    document.getElementById('special-message').innerText = '';
-    document.getElementById('msgInput').value = '';
-    const finalUrl = `${SAVE_URL}?action=CLEAR_MSG`;
-    document.getElementById('hidden_iframe').src = finalUrl;
-    setTimeout(() => { isSyncLocked = false; fetchData(); }, 2000);
-}
-
-async function fetchData() {
-    if (isSyncLocked) return;
-    try {
-        const res = await fetch(READ_URL + '&cachebuster=' + Date.now());
-        const text = await res.text();
-        const rows = text.split('\n').map(row => row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
+    <div class="admin-header">
+        <input type="text" id="busInput" style="width:40px; padding:6px;" placeholder="#">
+        <button class="btn btn-add" onclick="sendCommand('ADD', document.getElementById('busInput').value)">Add</button>
         
-        // Expert Fix: Always look at Column C (Index 2) for the message
-        // We check the first few rows to see where the message is sitting
-        let foundMsg = "";
-        for(let i=1; i<5; i++) {
-            if(rows[i] && rows[i][2]) {
-                foundMsg = rows[i][2].replace(/"/g, '').trim();
-                break;
+        <input type="text" id="msgInput" style="width:140px; padding:6px; margin-left:15px;" placeholder="News/Alert...">
+        <button class="btn btn-add" onclick="sendMsg()">Set</button>
+        <button class="btn btn-msg-clear" title="Clear Message" onclick="clearMsg()">𝗫</button>
+
+        <button class="btn btn-audio" id="voiceToggle" onclick="enableAudio()">🔊 Voice</button>
+        <button class="btn btn-clear" onclick="sendCommand('CLEAR')">Reset Grid</button>
+        <button class="btn" style="background:white; color:black;" onclick="window.location.hash='#tv'; location.reload();">TV Mode</button>
+    </div>
+
+    <div class="message-display" id="special-message"></div>
+    <div class="terminal-grid" id="bus-container"></div>
+    <div id="clock">--:--:--</div>
+    <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+
+    <script>
+        const SHEET_ID = '1LudmMCB3g73pPBYQI7nHTmTriWpb482Xs77vjI74xEU';
+        const SAVE_URL = 'https://script.google.com/macros/s/AKfycbzgpPVvvHU42-5RVO40Yikt3c45hUhiYTrY9FBeCEjXNSir9axtKJNkIgh643QE4U4R/exec';
+        const READ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
+
+        let busData = [];
+        let lastPlayedBus = null;
+        let audioEnabled = false;
+        let isSyncLocked = false;
+
+        if (window.location.hash === '#tv') document.body.classList.add('tv-mode');
+
+        function enableAudio() {
+            audioEnabled = true;
+            document.getElementById('voiceToggle').style.background = '#00ff66';
+            document.getElementById('voiceToggle').innerText = '✅ Voice Active';
+            window.speechSynthesis.speak(new SpeechSynthesisUtterance("Voice active"));
+        }
+
+        function sendMsg() {
+            const msg = document.getElementById('msgInput').value;
+            isSyncLocked = true;
+            document.getElementById('special-message').innerText = msg;
+            document.getElementById('hidden_iframe').src = `${SAVE_URL}?action=SET_MSG&msg=${encodeURIComponent(msg)}`;
+            setTimeout(() => { isSyncLocked = false; fetchData(); }, 3000);
+        }
+
+        function clearMsg() {
+            isSyncLocked = true;
+            document.getElementById('special-message').innerText = '';
+            document.getElementById('msgInput').value = '';
+            document.getElementById('hidden_iframe').src = `${SAVE_URL}?action=CLEAR_MSG`;
+            setTimeout(() => { isSyncLocked = false; fetchData(); }, 2000);
+        }
+
+        function sendCommand(action, bus = '') {
+            if (action === 'ADD' && !bus) return;
+            if (action === 'CLEAR') {
+                if (!confirm("Clear the bus grid?")) return;
+                busData = [];
+                render();
+            }
+            isSyncLocked = true;
+            document.getElementById('hidden_iframe').src = `${SAVE_URL}?action=${action}&bus=${encodeURIComponent(bus)}`;
+            setTimeout(() => { isSyncLocked = false; fetchData(); }, 3500);
+        }
+
+        async function fetchData() {
+            if (isSyncLocked) return;
+            try {
+                const res = await fetch(READ_URL + '&cachebuster=' + Date.now());
+                const text = await res.text();
+                const rows = text.split('\n').map(row => row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
+                
+                // 1. Grab Message from Column C (Index 2)
+                let foundMsg = "";
+                for(let i=1; i<10; i++) {
+                    if(rows[i] && rows[i][2] && rows[i][2].replace(/"/g, '').trim() !== "") {
+                        foundMsg = rows[i][2].replace(/"/g, '').trim();
+                        break;
+                    }
+                }
+                document.getElementById('special-message').innerText = foundMsg;
+
+                // 2. Grab Buses from Columns A and B
+                const newBusData = rows.slice(1).map(c => {
+                    const id = (c[0]||'').replace(/"/g, '').trim();
+                    const status = (c[1]||'').replace(/"/g, '').trim(); 
+                    return { id, status };
+                }).filter(b => b.id && b.id.length < 8);
+
+                if (audioEnabled && newBusData.length > 0) {
+                    const latest = newBusData.filter(b => b.status.toLowerCase().includes('boarding')).pop();
+                    if (latest && latest.id !== lastPlayedBus) {
+                        const msg = new SpeechSynthesisUtterance(`Bus ${latest.id} is boarding.`);
+                        msg.rate = 0.9; window.speechSynthesis.speak(msg);
+                        lastPlayedBus = latest.id;
+                    }
+                }
+                busData = newBusData;
+                render();
+            } catch (e) { console.error(e); }
+        }
+
+        function render() {
+            const container = document.getElementById('bus-container');
+            container.innerHTML = '';
+            for (let i = 0; i < 9; i++) {
+                const b = busData[i];
+                const card = document.createElement('div');
+                const isBoarding = b?.status.toLowerCase().includes('boarding');
+                const isDeparted = b?.status.toLowerCase().includes('departed');
+                card.className = `bus-card ${isBoarding ? 'active' : ''} ${isDeparted ? 'departed' : ''}`;
+                if (b) {
+                    card.innerHTML = `<button class="btn-delete" onclick="sendCommand('REMOVE', '${b.id}')">X</button><div class="bus-num">${b.id}</div><div class="status-msg">${b.status}</div>`;
+                } else {
+                    card.innerHTML = `<div class="bus-num" style="color:#222">-</div>`;
+                }
+                container.appendChild(card);
             }
         }
-        document.getElementById('special-message').innerText = foundMsg;
-
-        // Buses are strictly Columns A and B
-        const newBusData = rows.slice(1).map(c => {
-            const id = (c[0]||'').replace(/"/g, '').trim();
-            const status = (c[1]||'').replace(/"/g, '').trim(); 
-            return { id, status };
-        }).filter(b => b.id && b.id.length < 10); // Ignore long text/messages
-
-        busData = newBusData;
-        render();
-    } catch (e) { console.error(e); }
-}
+        setInterval(fetchData, 3000);
+        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }); }, 1000);
+        fetchData();
+    </script>
+</body>
+</html>
