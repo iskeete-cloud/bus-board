@@ -8,36 +8,36 @@
         body, html { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         .admin-header { background: #222; padding: 10px 15px; display: flex; align-items: center; border-bottom: 3px solid var(--accent); gap: 10px; }
         
-        /* New Message Bar Styling */
+        /* Message Bar - Now reduced to 10% height */
         .message-display { 
             background: #1a1a1a; 
             border: 3px solid var(--accent); 
-            margin: 12px 12px 0 12px; 
-            border-radius: 15px; 
-            height: 15vh; 
+            margin: 8px 12px 0 12px; 
+            border-radius: 12px; 
+            height: 10vh; 
             display: flex; 
             align-items: center; 
             justify-content: center; 
-            font-size: 4vw; 
+            font-size: 3.5vw; 
             font-weight: bold; 
             color: var(--accent);
             text-align: center;
             overflow: hidden;
         }
 
-        /* Adjusted Grid to share space with the message bar */
+        /* Terminal Grid - Expanded to fill remaining 90% space */
         .terminal-grid { 
             display: grid; 
             grid-template-columns: repeat(3, 1fr); 
             grid-template-rows: repeat(3, 1fr); 
             gap: 12px; 
             padding: 12px; 
-            height: calc(85vh - 160px); 
+            height: calc(90vh - 120px); 
             box-sizing: border-box; 
         }
 
         .bus-card { background: var(--card-bg); border: 3px solid #333; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; transition: all 0.3s ease; }
-        .bus-num { font-size: 6vw; font-weight: 900; line-height: 1; }
+        .bus-num { font-size: 6.5vw; font-weight: 900; line-height: 1; }
         .status-msg { font-size: 1.2vw; text-transform: uppercase; margin-top: 5px; font-weight: bold; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
         .active .status-msg { animation: pulse 1.5s infinite; }
@@ -45,20 +45,20 @@
         .active { border-color: var(--success) !important; color: var(--success) !important; background: #001a0a !important; }
         .departed { border-color: var(--departed) !important; color: var(--departed) !important; background: #1a0000 !important; }
         #clock { font-size: 2vw; font-weight: bold; color: var(--accent); text-align: center; height: 40px; }
-        .btn { padding: 10px 15px; cursor: pointer; font-weight: bold; border-radius: 5px; border: none; text-transform: uppercase; font-size: 0.8rem; }
+        .btn { padding: 8px 12px; cursor: pointer; font-weight: bold; border-radius: 5px; border: none; text-transform: uppercase; font-size: 0.75rem; }
         .btn-add { background: var(--accent); color: #000; }
         .btn-preset { background: #333; color: #fff; border: 1px solid #555; }
         .btn-audio { background: #0044ff; color: white; }
         .btn-clear { background: #444; color: #fff; margin-left: auto; }
         .btn-depart { background: var(--departed); color: white; margin-top: 10px; padding: 5px 15px; }
         body.tv-mode .admin-header, body.tv-mode .btn-depart, body.tv-mode .btn-delete { display: none; }
-        body.tv-mode .terminal-grid { height: calc(85vh - 40px); }
+        body.tv-mode .terminal-grid { height: calc(90vh - 40px); }
     </style>
 </head>
 <body>
 
     <div class="admin-header">
-        <input type="text" id="busInput" style="width:50px; padding:8px;" placeholder="#">
+        <input type="text" id="busInput" style="width:40px; padding:6px;" placeholder="#">
         <button class="btn btn-add" onclick="sendCommand('ADD', document.getElementById('busInput').value)">Add</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2007')">2007</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2009')">2009</button>
@@ -68,12 +68,12 @@
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2030')">2030</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2047')">2047</button>
         
-        <input type="text" id="msgInput" style="width:150px; padding:8px; margin-left:10px;" placeholder="Special Message...">
-        <button class="btn btn-add" onclick="sendMsg()">Set Msg</button>
+        <input type="text" id="msgInput" style="width:120px; padding:6px; margin-left:8px;" placeholder="Message...">
+        <button class="btn btn-add" onclick="sendMsg()">Set</button>
 
         <button class="btn btn-audio" id="voiceToggle" onclick="enableAudio()">🔊 Voice</button>
         <button class="btn btn-clear" onclick="sendCommand('CLEAR')">Reset</button>
-        <button class="btn" style="background:white;" onclick="window.location.hash='#tv'; location.reload();">TV Mode</button>
+        <button class="btn" style="background:white; color:black;" onclick="window.location.hash='#tv'; location.reload();">TV Mode</button>
     </div>
 
     <div class="message-display" id="special-message"></div>
@@ -102,9 +102,10 @@
             window.speechSynthesis.speak(new SpeechSynthesisUtterance("Voice system activated"));
         }
 
-        // New function to handle sending the special message
         function sendMsg() {
             const msg = document.getElementById('msgInput').value;
+            isSyncLocked = true; // Lock sync to prevent flashing
+            
             const form = document.createElement('form');
             form.method = 'GET';
             form.action = SAVE_URL;
@@ -114,7 +115,9 @@
             document.body.appendChild(form);
             form.submit();
             document.body.removeChild(form);
+            
             document.getElementById('special-message').innerText = msg;
+            setTimeout(() => { isSyncLocked = false; }, 5000); // Wait for Google to save
         }
 
         function sendCommand(action, bus = '') {
@@ -160,9 +163,11 @@
                 const text = await res.text();
                 const rows = text.split('\n').map(row => row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
                 
-                // Fetch the special message from cell C2 (Row 1, Index 2 in gviz)
-                const specialMsg = (rows[1][2] || '').replace(/"/g, '').trim();
-                document.getElementById('special-message').innerText = specialMsg;
+                // Get special message from cell C2
+                if (rows[1] && rows[1][2]) {
+                    const specialMsg = rows[1][2].replace(/"/g, '').trim();
+                    document.getElementById('special-message').innerText = specialMsg;
+                }
 
                 const dataRows = rows.slice(1);
                 const newBusData = dataRows.map(c => {
