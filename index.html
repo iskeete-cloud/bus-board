@@ -91,8 +91,6 @@
                     busData.push({ id: bus, status: 'Boarding' });
                     render();
                 }
-            } else if (action === 'DEPART' || action === 'REMOVE') {
-                render();
             } else if (action === 'CLEAR') {
                 document.getElementById('special-message').innerText = '';
             }
@@ -108,18 +106,20 @@
                 const text = await res.text();
                 const rows = text.split('\n').map(row => row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
                 
-                // LOOK IN ROW 25, COLUMN A (Index 24, Index 0)
+                // DATA MAP:
+                // Row 25 is Index 24. Column A is Index 0.
                 if (rows[24] && rows[24][0]) {
                     const rawMsg = rows[24][0].replace(/"/g, '').trim();
                     document.getElementById('special-message').innerText = rawMsg;
                 }
 
-                const dataRows = rows.slice(1);
-                const newBusData = dataRows.map(c => {
+                // BUS MAP: Only look at Rows 2 through 15 (Index 1 to 14)
+                const busRows = rows.slice(1, 15);
+                const newBusData = busRows.map(c => {
                     const id = (c[0]||'').replace(/"/g, '').trim();
                     let status = (c[1]||'').replace(/"/g, '').trim(); 
                     return { id, status };
-                }).filter(b => b.id && b.id !== document.getElementById('special-message').innerText); // Ensure msg row isn't read as a bus
+                }).filter(b => b.id && b.id.length < 10);
 
                 if (audioEnabled && newBusData.length > 0) {
                     const latest = newBusData.filter(b => b.status.toLowerCase().includes('boarding')).pop();
@@ -129,7 +129,7 @@
                         lastPlayedBus = latest.id;
                     }
                 }
-                busData = newBusData.slice(0, 9); // Keep grid at 9
+                busData = newBusData;
                 render();
             } catch (e) { console.error("Read error", e); }
         }
@@ -143,7 +143,7 @@
                 const isBoarding = b?.status.toLowerCase().includes('boarding');
                 const isDeparted = b?.status.toLowerCase().includes('departed');
                 card.className = `bus-card ${isBoarding ? 'active' : ''} ${isDeparted ? 'departed' : ''}`;
-                if (b && b.id.length < 10) { // Safety check to not render message as a bus
+                if (b) {
                     card.innerHTML = `<button class="btn-delete" onclick="sendCommand('REMOVE', '${b.id}')">X</button><div class="bus-num">${b.id}</div><div class="status-msg">${b.status}</div>${isBoarding ? `<button class="btn btn-depart" onclick="sendCommand('DEPART', '${b.id}')">Depart</button>` : ''}`;
                 } else {
                     card.innerHTML = `<div class="bus-num" style="color:#222">-</div>`;
