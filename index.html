@@ -7,8 +7,34 @@
         :root { --bg: #000; --card-bg: #111; --accent: #ffcc00; --success: #00ff66; --departed: #ff3333; --text: #fff; }
         body, html { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         .admin-header { background: #222; padding: 10px 15px; display: flex; align-items: center; border-bottom: 3px solid var(--accent); gap: 10px; }
-        .message-display { background: #1a1a1a; border: 3px solid var(--accent); margin: 8px 12px 0 12px; border-radius: 12px; height: 8vh; display: flex; align-items: center; justify-content: center; font-size: 3vw; font-weight: bold; color: var(--accent); text-align: center; overflow: hidden; }
-        .terminal-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 10px; padding: 10px 12px; height: calc(90vh - 130px); box-sizing: border-box; }
+        
+        /* Message Bar - 8vh to ensure clock safety */
+        .message-display { 
+            background: #1a1a1a; 
+            border: 3px solid var(--accent); 
+            margin: 8px 12px 0 12px; 
+            border-radius: 12px; 
+            height: 8vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 3vw; 
+            font-weight: bold; 
+            color: var(--accent);
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .terminal-grid { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            grid-template-rows: repeat(3, 1fr); 
+            gap: 10px; 
+            padding: 10px 12px; 
+            height: calc(90vh - 130px); 
+            box-sizing: border-box; 
+        }
+
         .bus-card { background: var(--card-bg); border: 3px solid #333; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; transition: all 0.3s ease; }
         .bus-num { font-size: 6.5vw; font-weight: 900; line-height: 1; }
         .status-msg { font-size: 1.2vw; text-transform: uppercase; margin-top: 5px; font-weight: bold; }
@@ -17,13 +43,16 @@
         .btn-delete { position: absolute; top: 10px; right: 10px; background: #ff3333; color: white; border: none; border-radius: 5px; width: 30px; height: 30px; cursor: pointer; font-weight: bold; font-size: 1rem; display: flex; align-items: center; justify-content: center; z-index: 10; }
         .active { border-color: var(--success) !important; color: var(--success) !important; background: #001a0a !important; }
         .departed { border-color: var(--departed) !important; color: var(--departed) !important; background: #1a0000 !important; }
+        
         #clock { font-size: 2vw; font-weight: bold; color: var(--accent); text-align: center; height: 35px; margin-bottom: 5px; }
+        
         .btn { padding: 8px 12px; cursor: pointer; font-weight: bold; border-radius: 5px; border: none; text-transform: uppercase; font-size: 0.75rem; }
         .btn-add { background: var(--accent); color: #000; }
         .btn-preset { background: #333; color: #fff; border: 1px solid #555; }
         .btn-audio { background: #0044ff; color: white; }
         .btn-clear { background: #444; color: #fff; margin-left: auto; }
         .btn-depart { background: var(--departed); color: white; margin-top: 10px; padding: 5px 15px; }
+        
         body.tv-mode .admin-header, body.tv-mode .btn-depart, body.tv-mode .btn-delete { display: none; }
         body.tv-mode .terminal-grid { height: calc(92vh - 40px); }
     </style>
@@ -40,8 +69,10 @@
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2028')">2028</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2030')">2030</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2047')">2047</button>
+        
         <input type="text" id="msgInput" style="width:120px; padding:6px; margin-left:8px;" placeholder="Message...">
         <button class="btn btn-add" onclick="sendMsg()">Set</button>
+
         <button class="btn btn-audio" id="voiceToggle" onclick="enableAudio()">🔊 Voice</button>
         <button class="btn btn-clear" onclick="sendCommand('CLEAR')">Reset</button>
         <button class="btn" style="background:white; color:black;" onclick="window.location.hash='#tv'; location.reload();">TV Mode</button>
@@ -83,20 +114,31 @@
 
         function sendCommand(action, bus = '') {
             if (action === 'ADD' && !bus) return;
-            if (action === 'CLEAR' && !confirm("Clear the board and message?")) return;
+            
+            // INSTANT UI FEEDBACK FOR CLEAR
+            if (action === 'CLEAR') {
+                if (!confirm("Clear the board and message?")) return;
+                busData = [];
+                document.getElementById('special-message').innerText = '';
+                document.getElementById('msgInput').value = '';
+                render();
+            }
+
             isSyncLocked = true;
+            
             if (action === 'ADD') {
                 document.getElementById('busInput').value = '';
                 if(!busData.find(b => b.id === bus)) {
                     busData.push({ id: bus, status: 'Boarding' });
                     render();
                 }
-            } else if (action === 'CLEAR') {
-                document.getElementById('special-message').innerText = '';
             }
+
             const finalUrl = `${SAVE_URL}?action=${action}&bus=${encodeURIComponent(bus)}`;
             document.getElementById('hidden_iframe').src = finalUrl;
-            setTimeout(() => { isSyncLocked = false; fetchData(); }, 4000);
+
+            const waitTime = (action === 'CLEAR') ? 2000 : 4000;
+            setTimeout(() => { isSyncLocked = false; fetchData(); }, waitTime);
         }
 
         async function fetchData() {
@@ -106,14 +148,13 @@
                 const text = await res.text();
                 const rows = text.split('\n').map(row => row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
                 
-                // DATA MAP:
-                // Row 25 is Index 24. Column A is Index 0.
+                // Read from Row 25 (Index 24)
                 if (rows[24] && rows[24][0]) {
                     const rawMsg = rows[24][0].replace(/"/g, '').trim();
                     document.getElementById('special-message').innerText = rawMsg;
                 }
 
-                // BUS MAP: Only look at Rows 2 through 15 (Index 1 to 14)
+                // Read buses from Rows 2-15
                 const busRows = rows.slice(1, 15);
                 const newBusData = busRows.map(c => {
                     const id = (c[0]||'').replace(/"/g, '').trim();
@@ -151,8 +192,11 @@
                 container.appendChild(card);
             }
         }
+
         setInterval(fetchData, 3000);
-        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }); }, 1000);
+        setInterval(() => { 
+            document.getElementById('clock').innerText = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }); 
+        }, 1000);
         fetchData();
     </script>
 </body>
