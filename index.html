@@ -8,7 +8,6 @@
         body, html { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         .admin-header { background: #222; padding: 10px 15px; display: flex; align-items: center; border-bottom: 3px solid var(--accent); gap: 10px; }
         
-        /* Message Bar - Reduced to 8vh to save space for the clock */
         .message-display { 
             background: #1a1a1a; 
             border: 3px solid var(--accent); 
@@ -25,7 +24,6 @@
             overflow: hidden;
         }
 
-        /* Terminal Grid - Adjusted to ensure bottom clock is visible */
         .terminal-grid { 
             display: grid; 
             grid-template-columns: repeat(3, 1fr); 
@@ -108,16 +106,9 @@
         function sendMsg() {
             const msg = document.getElementById('msgInput').value;
             isSyncLocked = true; 
-            
-            // Build the URL with the message parameter explicitly
             const finalUrl = `${SAVE_URL}?action=SET_MSG&msg=${encodeURIComponent(msg)}`;
-            
-            const ifr = document.getElementById('hidden_iframe');
-            ifr.src = finalUrl; // Trigger the save
-            
+            document.getElementById('hidden_iframe').src = finalUrl;
             document.getElementById('special-message').innerText = msg;
-            
-            // Wait 5 seconds to ensure Google has written to C2 before we allow a refresh
             setTimeout(() => { isSyncLocked = false; fetchData(); }, 5000);
         }
 
@@ -155,10 +146,13 @@
             try {
                 const res = await fetch(READ_URL + '&cachebuster=' + Date.now());
                 const text = await res.text();
+                // Split by rows
                 const rows = text.split('\n').map(row => row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
                 
-                // Get special message from Row 2, Column C (Index 2)
-                if (rows[1] && rows[1][2]) {
+                // FIXED MESSAGE LOGIC: 
+                // We look for the message in Cell C2 specifically.
+                // In Google's CSV export, that is row index 1, column index 2.
+                if (rows.length > 1 && rows[1].length > 2) {
                     const rawMsg = rows[1][2].replace(/"/g, '').trim();
                     document.getElementById('special-message').innerText = rawMsg;
                 }
