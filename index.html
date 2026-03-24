@@ -6,7 +6,17 @@
     <style>
         :root { --bg: #000; --card-bg: #111; --accent: #ffcc00; --success: #00ff66; --departed: #ff3333; --text: #fff; }
         body, html { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; overflow: hidden; }
-        .admin-header { background: #222; padding: 10px 15px; display: flex; align-items: center; border-bottom: 3px solid var(--accent); gap: 8px; flex-wrap: wrap; }
+        
+        /* HIDDEN BY DEFAULT: The Admin Header */
+        .admin-header { 
+            display: none; 
+            background: #222; padding: 10px 15px; align-items: center; 
+            border-bottom: 3px solid var(--accent); gap: 8px; flex-wrap: wrap; 
+        }
+        
+        /* SHOW ONLY WHEN AUTHORIZED */
+        body.admin-authorized .admin-header { display: flex; }
+
         .message-display { background: #1a1a1a; border: 3px solid var(--accent); margin: 8px 12px 0 12px; border-radius: 12px; height: 8vh; display: flex; align-items: center; justify-content: center; font-size: 3vw; font-weight: bold; color: var(--accent); text-align: center; overflow: hidden; }
         .terminal-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 10px; padding: 10px 12px; height: calc(90vh - 140px); box-sizing: border-box; }
         .bus-card { background: var(--card-bg); border: 3px solid #333; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; }
@@ -14,22 +24,22 @@
         .status-msg { font-size: 1.2vw; text-transform: uppercase; margin-top: 5px; font-weight: bold; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
         .active .status-msg { animation: pulse 1.5s infinite; }
-        .btn-delete { position: absolute; top: 10px; right: 10px; background: #ff3333; color: white; border: none; border-radius: 5px; width: 30px; height: 30px; cursor: pointer; font-weight: bold; }
+        
+        /* Hidden delete/depart buttons unless in Admin Mode */
+        .btn-delete, .btn-depart { display: none; }
+        body.admin-authorized .btn-delete { position: absolute; top: 10px; right: 10px; background: #ff3333; color: white; border: none; border-radius: 5px; width: 30px; height: 30px; cursor: pointer; font-weight: bold; display: block; }
+        body.admin-authorized .btn-depart { background: var(--departed); color: white; margin-top: 10px; padding: 5px 15px; display: block; }
+
         .active { border-color: var(--success) !important; color: var(--success) !important; background: #001a0a !important; }
         .departed { border-color: var(--departed) !important; color: var(--departed) !important; background: #1a0000 !important; }
         #clock { font-size: 2vw; font-weight: bold; color: var(--accent); text-align: center; height: 35px; margin-bottom: 5px; }
         .btn { padding: 8px 12px; cursor: pointer; font-weight: bold; border-radius: 5px; border: none; text-transform: uppercase; font-size: 0.75rem; }
         .btn-add { background: var(--accent); color: #000; }
         .btn-preset { background: #333; color: #fff; border: 1px solid #555; transition: all 0.2s; }
-        
-        /* NEW: Style for when a preset has been clicked */
         .btn-preset.clicked { color: var(--accent) !important; border-color: var(--accent) !important; }
-
         .btn-audio { background: #0044ff; color: white; }
         .btn-clear { background: #444; color: #fff; margin-left: auto; }
         .btn-msg-clear { background: #ff3333; color: white; padding: 6px 10px; }
-        .btn-depart { background: var(--departed); color: white; margin-top: 10px; padding: 5px 15px; }
-        body.tv-mode .admin-header, body.tv-mode .btn-delete, body.tv-mode .btn-depart { display: none; }
     </style>
 </head>
 <body>
@@ -37,7 +47,6 @@
     <div class="admin-header">
         <input type="text" id="busInput" style="width:40px; padding:6px;" placeholder="#">
         <button class="btn btn-add" onclick="sendCommand('ADD', document.getElementById('busInput').value)">Add</button>
-        
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2018')">2018</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2019')">2019</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2023')">2023</button>
@@ -45,14 +54,11 @@
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2034')">2034</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2040')">2040</button>
         <button class="btn btn-preset" onclick="sendCommand('ADD', '2046')">2046</button>
-        
         <input type="text" id="msgInput" style="width:120px; padding:6px; margin-left:10px;" placeholder="Message...">
         <button class="btn btn-add" onclick="sendMsg()">Set</button>
         <button class="btn btn-msg-clear" onclick="clearMsg()">𝗫</button>
-
         <button class="btn btn-audio" id="voiceToggle" onclick="enableAudio()">🔊 Voice</button>
         <button class="btn btn-clear" onclick="sendCommand('CLEAR')">Reset Grid</button>
-        <button class="btn" style="background:white; color:black;" onclick="window.location.hash='#tv'; location.reload();">TV Mode</button>
     </div>
 
     <div class="message-display" id="special-message"></div>
@@ -61,6 +67,13 @@
     <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
 
     <script>
+        // --- SECURITY CHECK ---
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('admin') === '8822') {
+            document.body.classList.add('admin-authorized');
+        }
+        // ----------------------
+
         const SHEET_ID = '1LudmMCB3g73pPBYQI7nHTmTriWpb482Xs77vjI74xEU';
         const SAVE_URL = 'https://script.google.com/macros/s/AKfycbzgpPVvvHU42-5RVO40Yikt3c45hUhiYTrY9FBeCEjXNSir9axtKJNkIgh643QE4U4R/exec';
         const READ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
@@ -69,8 +82,6 @@
         let lastPlayedBus = null;
         let audioEnabled = false;
         let isSyncLocked = false;
-
-        if (window.location.hash === '#tv') document.body.classList.add('tv-mode');
 
         function enableAudio() {
             audioEnabled = true;
@@ -97,28 +108,22 @@
 
         function sendCommand(action, bus = '') {
             if (action === 'ADD' && !bus) return;
-            
             if (action === 'CLEAR') {
                 if (!confirm("Clear the bus grid?")) return;
                 busData = [];
-                // Reset preset button colors
                 document.querySelectorAll('.btn-preset').forEach(btn => btn.classList.remove('clicked'));
                 render();
             }
-
             if (action === 'ADD') {
                 document.getElementById('busInput').value = '';
-                // Highlight the matching preset button if it exists
                 document.querySelectorAll('.btn-preset').forEach(btn => {
                     if (btn.innerText === bus) btn.classList.add('clicked');
                 });
-
                 if(!busData.find(b => b.id === bus)) {
                     busData.push({ id: bus, status: 'Boarding' });
                     render();
                 }
             }
-            
             isSyncLocked = true;
             document.getElementById('hidden_iframe').src = `${SAVE_URL}?action=${action}&bus=${encodeURIComponent(bus)}`;
             setTimeout(() => { isSyncLocked = false; fetchData(); }, 3500);
@@ -130,17 +135,14 @@
                 const res = await fetch(READ_URL + '&cachebuster=' + Date.now());
                 const text = await res.text();
                 const rows = text.split('\n').map(row => row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
-                
                 if (rows[0] && rows[0][2]) {
                     document.getElementById('special-message').innerText = rows[0][2].replace(/"/g, '').trim();
                 }
-
                 const newBusData = rows.slice(1).map(c => {
                     const id = (c[0]||'').replace(/"/g, '').trim();
                     const status = (c[1]||'').replace(/"/g, '').trim(); 
                     return { id, status };
                 }).filter(b => b.id && b.id.length < 8);
-
                 if (audioEnabled && newBusData.length > 0) {
                     const latest = newBusData.filter(b => b.status.toLowerCase().includes('boarding')).pop();
                     if (latest && latest.id !== lastPlayedBus) {
